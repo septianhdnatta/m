@@ -1,4 +1,6 @@
+
 export default async function handler(req, res) {
+  if (req.method === 'OPTIONS') return res.status(204).end();
   if (req.method !== 'POST') return res.status(405).json({ error: 'METHOD_NOT_ALLOWED' });
 
   try {
@@ -18,7 +20,7 @@ export default async function handler(req, res) {
 
     if (!requestedBy || !title) return res.status(400).json({ error: 'INVALID_INPUT' });
 
-    // 1) GET current file (need sha for update) [GitHub contents API requires sha for update] [web:8]
+    // 1) GET content untuk ambil sha (sha dibutuhkan saat update file) [web:8]
     const getUrl = `https://api.github.com/repos/${owner}/${repo}/contents/${encodeURIComponent(path)}?ref=${encodeURIComponent(branch)}`;
     const getRes = await fetch(getUrl, {
       headers: {
@@ -34,19 +36,20 @@ export default async function handler(req, res) {
 
     const getData = await getRes.json();
     const sha = getData.sha;
+
     const contentBase64 = (getData.content || '').replace(/\n/g, '');
     const jsonText = Buffer.from(contentBase64, 'base64').toString('utf8');
 
     let parsed;
     try { parsed = JSON.parse(jsonText); } catch { parsed = { requests: [] }; }
-    const requests = Array.isArray(parsed.requests) ? parsed.requests : [];
 
+    const requests = Array.isArray(parsed.requests) ? parsed.requests : [];
     requests.push({ title, requestedBy, timestamp: Date.now() });
 
     const newJson = JSON.stringify({ requests }, null, 2);
     const newContent = Buffer.from(newJson, 'utf8').toString('base64');
 
-    // 2) PUT update file with base64 content + sha [web:8]
+    // 2) PUT update file dengan base64 + sha [web:8]
     const putUrl = `https://api.github.com/repos/${owner}/${repo}/contents/${encodeURIComponent(path)}`;
     const putRes = await fetch(putUrl, {
       method: 'PUT',
